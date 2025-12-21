@@ -1,0 +1,99 @@
+import SwiftUI
+import WebKit
+
+struct WebViewContainer: View {
+    let url: URL
+    
+    var body: some View {
+        WebViewRepresentable(url: url)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+struct WebViewRepresentable: NSViewRepresentable {
+    let url: URL
+    
+    func makeNSView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.preferences.javaScriptCanOpenWindowsAutomatically = true
+        
+        // Enable developer extras (Web Inspector)
+        config.preferences.setValue(true, forKey: "developerExtrasEnabled")
+        
+        let webView = StoaWebView(frame: .zero, configuration: config)
+        webView.allowsMagnification = true
+        webView.load(URLRequest(url: url))
+        
+        return webView
+    }
+    
+    func updateNSView(_ webView: WKWebView, context: Context) {
+        // Only reload if URL changed
+        if webView.url != url {
+            webView.load(URLRequest(url: url))
+        }
+    }
+}
+
+/// Custom WKWebView subclass that suppresses beeps for unhandled key events
+class StoaWebView: WKWebView {
+    private var currentZoomLevel: CGFloat = 1.0
+    
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        // Let the menu system handle standard shortcuts like Cmd+Q
+        if NSApp.mainMenu?.performKeyEquivalent(with: event) == true {
+            return true
+        }
+        
+        // Handle zoom shortcuts
+        if event.modifierFlags.contains(.command) {
+            let chars = event.charactersIgnoringModifiers ?? ""
+            
+            switch chars {
+            case "=", "+":
+                handleZoomIn()
+                return true
+            case "-":
+                handleZoomOut()
+                return true
+            case "0":
+                handleZoomReset()
+                return true
+            default:
+                break
+            }
+        }
+        
+        // Let super handle it, return true for command keys to prevent beep
+        _ = super.performKeyEquivalent(with: event)
+        return event.modifierFlags.contains(.command)
+    }
+    
+    override func noResponder(for eventSelector: Selector) {
+        // Do nothing - prevents the beep
+    }
+    
+    override var acceptsFirstResponder: Bool { true }
+    
+    // MARK: - Zoom Handling
+    
+    private func handleZoomIn() {
+        currentZoomLevel *= 1.1
+        applyZoom()
+    }
+    
+    private func handleZoomOut() {
+        currentZoomLevel /= 1.1
+        applyZoom()
+    }
+    
+    private func handleZoomReset() {
+        currentZoomLevel = 1.0
+        applyZoom()
+    }
+    
+    private func applyZoom() {
+        let script = "document.body.style.zoom = '\(currentZoomLevel)'"
+        evaluateJavaScript(script, completionHandler: nil)
+    }
+}

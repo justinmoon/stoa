@@ -42,8 +42,16 @@ test:
     swift test
 
 # Demo milestones - these just run stoa at different points in development
-# Demo 1: Single Terminal Window (current)
+# Demo 1: Single Terminal Window
 demo-1: run
+
+# Demo 2: Single WebView Window
+demo-2: build
+    swift run stoa --webview
+
+# Demo 2 with custom URL
+demo-2-url url: build
+    swift run stoa --url {{url}}
 
 # Clean build artifacts
 clean:
