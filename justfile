@@ -57,6 +57,10 @@ demo-2-url url: build
 demo-3: build
     swift run stoa --split
 
+# Demo 4: Dynamic Splits (Terminals Only)
+demo-4: build
+    swift run stoa --dynamic
+
 # Clean build artifacts
 clean:
     swift package clean

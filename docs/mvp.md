@@ -65,8 +65,8 @@ Build in usable increments to maintain momentum.
 - Proves: Multiple libghostty surfaces work
 
 ### Demo 4: Dynamic Splits (Terminals Only)
-- Keybinds to create/close splits (Cmd+D, Cmd+Shift+D, Cmd+W)
-- Keybinds to navigate between panes (Cmd+hjkl or Cmd+arrows)
+- Keybinds to create/close splits (Cmd+\ for horizontal, Cmd+- for vertical, Cmd+W to close)
+- Keybinds to navigate between panes (Cmd+hjkl)
 - Resizable dividers
 - Proves: Split tree logic works
 
@@ -222,8 +222,8 @@ struct PaneView: View {
 
 | Keybind | Action |
 |---------|--------|
-| `Cmd+D` | Split right (terminal) |
-| `Cmd+Shift+D` | Split down (terminal) |
+| `Cmd+\` | Split horizontal (left/right) |
+| `Cmd+-` | Split vertical (top/bottom) |
 | `Cmd+Shift+W` | Open webview split (prompts for URL) |
 | `Cmd+W` | Close focused pane |
 | `Cmd+H/J/K/L` | Focus pane left/down/up/right |

@@ -3,6 +3,9 @@ import AppKit
 class TerminalSurfaceView: NSView {
     private var surface: ghostty_surface_t?
     private var trackingArea: NSTrackingArea?
+    
+    /// Callback for handling Cmd+key events (for split management)
+    var onKeyDown: ((NSEvent) -> Bool)?
 
     init(app: ghostty_app_t) {
         super.init(frame: NSMakeRect(0, 0, 800, 600))
@@ -106,6 +109,13 @@ class TerminalSurfaceView: NSView {
     // MARK: - Keyboard Input
 
     override func keyDown(with event: NSEvent) {
+        // Let controller handle Cmd+key for splits
+        if event.modifierFlags.contains(.command) {
+            if let handler = onKeyDown, handler(event) {
+                return
+            }
+        }
+        
         guard let surface = surface else { return }
 
         let mods = translateMods(event.modifierFlags)

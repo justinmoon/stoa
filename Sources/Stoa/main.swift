@@ -2,6 +2,7 @@
 // Demo 1: Single Terminal Window - Proves: libghostty integration works
 // Demo 2: Single WebView Window - Proves: WebView bridge works
 // Demo 3: Static Split (Two Terminals) - Proves: Multiple libghostty surfaces work
+// Demo 4: Dynamic Splits (Terminals Only) - Proves: Split tree logic works
 
 import AppKit
 import Foundation
@@ -11,11 +12,17 @@ enum DemoMode {
     case terminal
     case webview(URL)
     case split
+    case dynamic
 }
 
 // Parse command-line arguments
 func parseArgs() -> DemoMode {
     let args = CommandLine.arguments
+    
+    // Check for --dynamic flag (Demo 4)
+    if args.contains("--dynamic") {
+        return .dynamic
+    }
     
     // Check for --split flag (Demo 3)
     if args.contains("--split") {
@@ -46,7 +53,7 @@ let demoMode = parseArgs()
 
 // Initialize Ghostty for terminal modes
 switch demoMode {
-case .terminal, .split:
+case .terminal, .split, .dynamic:
     if ghostty_init(UInt(CommandLine.argc), CommandLine.unsafeArgv) != GHOSTTY_SUCCESS {
         print("ghostty_init failed")
         exit(1)

@@ -5,6 +5,7 @@ import WebKit
 class AppDelegate: NSObject, NSApplicationDelegate {
     var window: NSWindow!
     var ghosttyApp: GhosttyApp?
+    var windowController: StoaWindowController?
     let mode: DemoMode
     
     init(mode: DemoMode) {
@@ -25,13 +26,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         switch mode {
         case .terminal:
             setupTerminalMode()
+            window.makeKeyAndOrderFront(nil)
         case .webview(let url):
             setupWebViewMode(url: url)
+            window.makeKeyAndOrderFront(nil)
         case .split:
             setupSplitMode()
+            window.makeKeyAndOrderFront(nil)
+        case .dynamic:
+            setupDynamicMode()
         }
-        
-        window.makeKeyAndOrderFront(nil)
     }
     
     private func setupTerminalMode() {
@@ -103,6 +107,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Focus the left terminal initially
         DispatchQueue.main.async {
             self.window.makeFirstResponder(leftTerminal)
+        }
+    }
+    
+    private func setupDynamicMode() {
+        // Create the Ghostty app wrapper
+        ghosttyApp = GhosttyApp()
+        guard let ghosttyApp = ghosttyApp, ghosttyApp.isReady else {
+            print("Failed to initialize Ghostty")
+            NSApp.terminate(nil)
+            return
+        }
+        
+        // Create the window controller (it manages its own window)
+        windowController = StoaWindowController(ghosttyApp: ghosttyApp)
+        windowController?.showWindow(nil)
+        
+        // Focus the initial terminal
+        DispatchQueue.main.async {
+            if let pane = self.windowController?.focusedPane,
+               let view = pane.view {
+                self.windowController?.window?.makeFirstResponder(view)
+            }
         }
     }
     
