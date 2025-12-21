@@ -61,6 +61,10 @@ demo-3: build
 demo-4: build
     swift run stoa --dynamic
 
+# Demo 5: Mixed Panes (MVP Target) - terminals and webviews
+demo-5: build
+    swift run stoa --dynamic
+
 # Clean build artifacts
 clean:
     swift package clean

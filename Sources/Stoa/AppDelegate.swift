@@ -123,8 +123,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         windowController = StoaWindowController(ghosttyApp: ghosttyApp)
         windowController?.showWindow(nil)
         
-        // Focus the initial terminal
+        // Bring app to foreground and focus the initial terminal
         DispatchQueue.main.async {
+            NSApp.activate(ignoringOtherApps: true)
             if let pane = self.windowController?.focusedPane,
                let view = pane.view {
                 self.windowController?.window?.makeFirstResponder(view)

@@ -39,9 +39,17 @@ struct WebViewRepresentable: NSViewRepresentable {
 class StoaWebView: WKWebView {
     private var currentZoomLevel: CGFloat = 1.0
     
+    /// Callback for intercepting key events (for Stoa keybindings)
+    var onKeyDown: ((NSEvent) -> Bool)?
+    
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         // Let the menu system handle standard shortcuts like Cmd+Q
         if NSApp.mainMenu?.performKeyEquivalent(with: event) == true {
+            return true
+        }
+        
+        // Let Stoa handle its keybindings first
+        if let handler = onKeyDown, handler(event) {
             return true
         }
         

@@ -1,4 +1,5 @@
 import SwiftUI
+import WebKit
 
 /// Renders a SplitTree recursively with resizable dividers.
 struct SplitTreeView: View {
@@ -151,7 +152,7 @@ struct SplitNodeView: View {
     }
 }
 
-/// Renders a single pane with its terminal view.
+/// Renders a single pane with either a terminal or webview.
 struct PaneView: View {
     let pane: Pane
     @ObservedObject var controller: StoaWindowController
@@ -164,10 +165,11 @@ struct PaneView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                if let terminalView = pane.view as? TerminalSurfaceView {
-                    TerminalViewRepresentable(terminalView: terminalView, size: geo.size)
-                } else {
-                    Color.black
+                switch pane.content {
+                case .terminal:
+                    PaneTerminalViewRepresentable(pane: pane, size: geo.size, controller: controller)
+                case .webview(let url):
+                    PaneWebViewRepresentable(pane: pane, url: url, controller: controller)
                 }
                 
                 // Focus border
@@ -182,6 +184,67 @@ struct PaneView: View {
         .contentShape(Rectangle())
         .onTapGesture {
             controller.focusPane(pane)
+        }
+    }
+}
+
+/// NSViewRepresentable for terminal panes - creates view on demand and stores reference in pane model
+struct PaneTerminalViewRepresentable: NSViewRepresentable {
+    let pane: Pane
+    let size: CGSize
+    let controller: StoaWindowController
+    
+    func makeNSView(context: Context) -> TerminalSurfaceView {
+        // Reuse existing view if available
+        if let existingView = pane.view as? TerminalSurfaceView {
+            return existingView
+        }
+        
+        // Create new terminal view
+        guard let app = controller.ghosttyApp.app else {
+            fatalError("GhosttyApp not initialized")
+        }
+        
+        let terminalView = TerminalSurfaceView(app: app)
+        terminalView.onKeyDown = { [weak controller] event in
+            controller?.handleKeyDown(event) ?? false
+        }
+        pane.view = terminalView
+        return terminalView
+    }
+    
+    func updateNSView(_ terminalView: TerminalSurfaceView, context: Context) {
+        // Always update frame - SwiftUI will call this when size changes
+        terminalView.frame = CGRect(origin: .zero, size: size)
+        terminalView.updateSurfaceSize()
+    }
+}
+
+/// NSViewRepresentable for webview panes - stores view reference in pane model
+struct PaneWebViewRepresentable: NSViewRepresentable {
+    let pane: Pane
+    let url: URL
+    let controller: StoaWindowController
+    
+    func makeNSView(context: Context) -> StoaWebView {
+        let config = WKWebViewConfiguration()
+        config.preferences.javaScriptCanOpenWindowsAutomatically = true
+        config.preferences.setValue(true, forKey: "developerExtrasEnabled")
+        
+        let webView = StoaWebView(frame: .zero, configuration: config)
+        webView.allowsMagnification = true
+        webView.onKeyDown = { [weak controller] event in
+            controller?.handleKeyDown(event) ?? false
+        }
+        webView.load(URLRequest(url: url))
+        pane.view = webView
+        return webView
+    }
+    
+    func updateNSView(_ webView: StoaWebView, context: Context) {
+        // Only reload if URL changed
+        if webView.url != url {
+            webView.load(URLRequest(url: url))
         }
     }
 }

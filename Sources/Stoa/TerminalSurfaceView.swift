@@ -95,8 +95,17 @@ class TerminalSurfaceView: NSView {
 
     override func layout() {
         super.layout()
+        updateSurfaceSize()
+    }
+    
+    /// Notify libghostty of size change - must convert to backing (pixel) coordinates
+    func updateSurfaceSize() {
         guard let surface = surface else { return }
-        ghostty_surface_set_size(surface, UInt32(bounds.width), UInt32(bounds.height))
+        // Convert points to pixels (framebuffer size)
+        let scaledSize = convertToBacking(bounds.size)
+        let width = UInt32(max(1, scaledSize.width))
+        let height = UInt32(max(1, scaledSize.height))
+        ghostty_surface_set_size(surface, width, height)
     }
 
     override func viewDidChangeBackingProperties() {
