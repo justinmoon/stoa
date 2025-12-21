@@ -53,6 +53,10 @@ demo-2: build
 demo-2-url url: build
     swift run stoa --url {{url}}
 
+# Demo 3: Static Split (Two Terminals)
+demo-3: build
+    swift run stoa --split
+
 # Clean build artifacts
 clean:
     swift package clean

@@ -27,6 +27,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             setupTerminalMode()
         case .webview(let url):
             setupWebViewMode(url: url)
+        case .split:
+            setupSplitMode()
         }
         
         window.makeKeyAndOrderFront(nil)
@@ -72,6 +74,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if let webView = self.findWebView(in: self.window.contentView) {
                 self.window.makeFirstResponder(webView)
             }
+        }
+    }
+    
+    private func setupSplitMode() {
+        window.title = "Stoa - Demo 3"
+        
+        // Create the Ghostty app wrapper
+        ghosttyApp = GhosttyApp()
+        guard let ghosttyApp = ghosttyApp, ghosttyApp.isReady else {
+            print("Failed to initialize Ghostty")
+            NSApp.terminate(nil)
+            return
+        }
+        
+        // Create two terminal views
+        let leftTerminal = TerminalSurfaceView(app: ghosttyApp.app!)
+        let rightTerminal = TerminalSurfaceView(app: ghosttyApp.app!)
+        
+        // Host SwiftUI content with split terminals
+        let contentView = NSHostingView(rootView:
+            SplitTerminalContainer(leftTerminal: leftTerminal, rightTerminal: rightTerminal)
+                .environmentObject(ghosttyApp)
+        )
+        
+        window.contentView = contentView
+        
+        // Focus the left terminal initially
+        DispatchQueue.main.async {
+            self.window.makeFirstResponder(leftTerminal)
         }
     }
     

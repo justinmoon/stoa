@@ -1,6 +1,7 @@
 // Stoa - Tiling Window Manager for AI-driven Development
 // Demo 1: Single Terminal Window - Proves: libghostty integration works
 // Demo 2: Single WebView Window - Proves: WebView bridge works
+// Demo 3: Static Split (Two Terminals) - Proves: Multiple libghostty surfaces work
 
 import AppKit
 import Foundation
@@ -9,11 +10,17 @@ import SwiftUI
 enum DemoMode {
     case terminal
     case webview(URL)
+    case split
 }
 
 // Parse command-line arguments
 func parseArgs() -> DemoMode {
     let args = CommandLine.arguments
+    
+    // Check for --split flag (Demo 3)
+    if args.contains("--split") {
+        return .split
+    }
     
     // Check for --url flag
     if let urlIndex = args.firstIndex(of: "--url"), urlIndex + 1 < args.count {
@@ -37,12 +44,15 @@ func parseArgs() -> DemoMode {
 
 let demoMode = parseArgs()
 
-// Only initialize Ghostty for terminal mode
-if case .terminal = demoMode {
+// Initialize Ghostty for terminal modes
+switch demoMode {
+case .terminal, .split:
     if ghostty_init(UInt(CommandLine.argc), CommandLine.unsafeArgv) != GHOSTTY_SUCCESS {
         print("ghostty_init failed")
         exit(1)
     }
+case .webview:
+    break
 }
 
 let app = NSApplication.shared
