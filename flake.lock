@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "beads": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1766357082,
+        "narHash": "sha256-lq+ip7xap5faC2VLdmkoqQYQdDzmqgibJ1WFXAV3JI4=",
+        "owner": "steveyegge",
+        "repo": "beads",
+        "rev": "61361995cbe5f635e6f058bbc4236bddcd8c258c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "steveyegge",
+        "repo": "beads",
+        "type": "github"
+      }
+    },
     "flake-compat": {
       "flake": false,
       "locked": {
@@ -86,6 +102,7 @@
     },
     "root": {
       "inputs": {
+        "beads": "beads",
         "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
         "nixpkgs": "nixpkgs",
