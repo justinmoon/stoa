@@ -28,18 +28,12 @@ class GhosttyApp: ObservableObject {
         runtimeCfg.action_cb = { app, target, action in
             return true
         }
-        runtimeCfg.read_clipboard_cb = { userdata, location, state in
-            // Clipboard read - not implemented for demo
-        }
-        runtimeCfg.confirm_read_clipboard_cb = { userdata, str, state, request in
-            // Confirm clipboard read - not implemented for demo
-        }
+        runtimeCfg.read_clipboard_cb = { userdata, location, state in }
+        runtimeCfg.confirm_read_clipboard_cb = { userdata, str, state, request in }
         runtimeCfg.write_clipboard_cb = { userdata, location, content, len, confirm in
             GhosttyApp.writeClipboard(userdata, content: content)
         }
-        runtimeCfg.close_surface_cb = { userdata, processAlive in
-            // Surface close - not implemented for demo
-        }
+        runtimeCfg.close_surface_cb = { userdata, processAlive in }
 
         // Create the app
         guard let ghosttyApp = ghostty_app_new(&runtimeCfg, cfg) else {

@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Main controller for Demo 4: manages split tree state, focus, and keybindings.
+/// Main window controller: manages split tree state, focus, and keybindings.
 class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObject {
     @Published var splitTree: SplitTree
     @Published var focusedPaneId: UUID?

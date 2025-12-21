@@ -160,7 +160,6 @@ class TerminalSurfaceView: NSView {
     }
 
     override func flagsChanged(with event: NSEvent) {
-        // Modifier-only changes - not needed for basic demo
     }
 
     // MARK: - Mouse Input

@@ -7,7 +7,6 @@ enum PaneContent: Codable, Equatable {
 }
 
 /// A pane is a single content area in the split tree.
-/// For Demo 5, panes can contain terminals or webviews.
 class Pane: Identifiable, Codable {
     let id: UUID
     var content: PaneContent
