@@ -10,6 +10,7 @@ Libraries/
 # Nix
 result
 result-*
+.direnv/
 
 # macOS
 .DS_Store
