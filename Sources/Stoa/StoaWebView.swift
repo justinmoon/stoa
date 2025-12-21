@@ -1,39 +1,5 @@
-import SwiftUI
+import AppKit
 import WebKit
-
-struct WebViewContainer: View {
-    let url: URL
-    
-    var body: some View {
-        WebViewRepresentable(url: url)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-struct WebViewRepresentable: NSViewRepresentable {
-    let url: URL
-    
-    func makeNSView(context: Context) -> WKWebView {
-        let config = WKWebViewConfiguration()
-        config.preferences.javaScriptCanOpenWindowsAutomatically = true
-        
-        // Enable developer extras (Web Inspector)
-        config.preferences.setValue(true, forKey: "developerExtrasEnabled")
-        
-        let webView = StoaWebView(frame: .zero, configuration: config)
-        webView.allowsMagnification = true
-        webView.load(URLRequest(url: url))
-        
-        return webView
-    }
-    
-    func updateNSView(_ webView: WKWebView, context: Context) {
-        // Only reload if URL changed
-        if webView.url != url {
-            webView.load(URLRequest(url: url))
-        }
-    }
-}
 
 /// Custom WKWebView subclass that suppresses beeps for unhandled key events
 class StoaWebView: WKWebView {

@@ -30,7 +30,7 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
             backing: .buffered,
             defer: false
         )
-        window.title = "Stoa - Demo 5"
+        window.title = "Stoa"
         window.center()
         
         super.init(window: window)
