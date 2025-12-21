@@ -1,0 +1,15 @@
+# Build artifacts
+.build/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+
+# Libraries (built from ghostty, not committed)
+Libraries/
+
+# Nix
+result
+result-*
+
+# macOS
+.DS_Store
