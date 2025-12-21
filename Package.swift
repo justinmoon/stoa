@@ -7,16 +7,16 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
-        .executable(name: "stoa-demo-1", targets: ["Demo1"]),
+        .executable(name: "stoa", targets: ["Stoa"]),
     ],
     targets: [
-        // Demo 1: Single Terminal Window
+        // Main Stoa application
         .executableTarget(
-            name: "Demo1",
+            name: "Stoa",
             dependencies: ["StoaKit"],
-            path: "Sources/Demo1",
+            path: "Sources/Stoa",
             swiftSettings: [
-                .unsafeFlags(["-import-objc-header", "Sources/Demo1/BridgingHeader.h"])
+                .unsafeFlags(["-import-objc-header", "Sources/Stoa/BridgingHeader.h"])
             ],
             linkerSettings: [
                 .linkedFramework("Cocoa"),

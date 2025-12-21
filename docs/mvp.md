@@ -44,7 +44,9 @@ A full-screen desktop app that provides an i3-like tiling experience for coding,
 
 ## Demo Progression
 
-Build in usable increments to maintain momentum:
+Build in usable increments to maintain momentum.
+
+**Note:** Demos are iterative milestones on a single evolving codebase, not separate standalone apps. Each demo builds on the previous one. The `just demo-N` commands simply run the current state of stoa - they're markers of progress, not different executables.
 
 ### Demo 1: Single Terminal Window
 - SwiftUI app with one full-screen window

@@ -33,13 +33,17 @@ build: copy-libghostty
 build-release: copy-libghostty
     swift build -c release
 
-# Run Demo 1: Single Terminal Window
-demo-1: copy-libghostty
-    swift run stoa-demo-1
+# Run Stoa
+run: build
+    swift run stoa
 
 # Run tests
 test:
     swift test
+
+# Demo milestones - these just run stoa at different points in development
+# Demo 1: Single Terminal Window (current)
+demo-1: run
 
 # Clean build artifacts
 clean:
