@@ -70,6 +70,110 @@ class WebViewApp: StoaApp  { /* wraps WKWebView, no FFI */ }
 
 ---
 
+## Fast Iteration Strategy
+
+The key insight: **the editor can be a separate process**, not linked into Stoa.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Stoa (your dev environment - dogfood it!)                  │
+│  ┌─────────────────────┬───────────────────────────────────┐│
+│  │ Terminal pane       │ Editor pane (placeholder NSView)  ││
+│  │                     │                                   ││
+│  │ $ cargo watch -x    │     ┌───────────────────────┐     ││
+│  │   'run --example    │     │ GPUI window           │     ││
+│  │    standalone'      │     │ (SEPARATE PROCESS)    │     ││
+│  │                     │     │                       │     ││
+│  │ [rebuilds on save]  │     │ Stoa positions this   │     ││
+│  │                     │     │ over the placeholder  │     ││
+│  │                     │     └───────────────────────┘     ││
+│  └─────────────────────┴───────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Why Subprocess First?
+
+| Approach | Rebuild cycle | Complexity |
+|----------|---------------|------------|
+| Static lib in Stoa | ~30-60 sec (Rust + Swift) | High |
+| Subprocess | ~5-10 sec (Rust only) | Low |
+
+### Iteration Workflow
+
+```bash
+# Terminal 1 (in Stoa): Watch and rebuild
+cd ~/code/stoa-gpui
+cargo watch -x 'run --example standalone -- /tmp/test.rs'
+
+# Terminal 2 (in Stoa): Edit the editor code
+vim src/editor_app.rs
+# Save → cargo watch rebuilds → new editor window appears
+
+# EVEN FASTER: Editor edits itself
+cargo run --example standalone -- src/editor_app.rs
+# Save, Ctrl-C, up-arrow, enter → 5 second loop
+```
+
+### Integration Phases
+
+1. **Phase A: Standalone binary** - Just get the editor running in its own window
+2. **Phase B: Subprocess mode** - Stoa spawns editor, positions its window
+3. **Phase C (optional): Static lib** - Link into Stoa for tighter integration
+
+We may never need Phase C. Subprocess mode might be good enough forever.
+
+---
+
+## The NSApplication Problem (Critical)
+
+GPUI assumes it owns the macOS app:
+- Creates `GPUIApplication` subclass
+- Sets itself as app delegate
+- Calls `NSApplication.run()` (takes over the main loop)
+
+**This conflicts with Stoa**, which already owns NSApp.
+
+### Solution: GPUI Embedded Runtime Mode
+
+Add a GPUI entry path that:
+- Does NOT call `NSApplication.run()`
+- Does NOT set itself as app delegate
+- Does NOT require GPUIApplication principal class
+- Still initializes enough runtime to create windows, render, handle input
+
+```rust
+// Current GPUI (takes over the app)
+gpui::App::new().run(|cx| { ... });
+
+// New embedded mode (attaches to existing app)
+gpui::App::new().run_embedded(|cx| { ... });
+// Returns immediately, doesn't block on NSApp.run()
+```
+
+### What "Embedded" Means in Practice
+
+For the subprocess approach, we don't even need true embedding initially:
+1. Editor subprocess creates its own GPUI window (borderless, no titlebar)
+2. Stoa tells editor (via IPC) where to position itself
+3. Editor moves its window to overlay Stoa's pane area
+4. Focus: Stoa tells editor when to activate/deactivate
+
+This gives us a working editor pane with minimal GPUI surgery.
+
+### GPUI Changes Required (Small!)
+
+Files to modify in `~/code/zed/crates/gpui/src/platform/mac/`:
+
+| File | Change |
+|------|--------|
+| `platform.rs` | Add `run_embedded()` that skips `NSApp.run()` |
+| `app.rs` | Make app delegate optional in embedded mode |
+| `window.rs` | Allow borderless/undecorated windows |
+
+Everything else (Editor, Buffer, vim, rendering) works unchanged.
+
+---
+
 ## Phase 1: Define Universal App Interface
 
 ### 1.1 Create the Swift Protocol
@@ -951,25 +1055,100 @@ Test: Does `vim::init(cx)` work when Editor is created in embedded surface?
 
 ---
 
-## Implementation Order
+## Implementation Order (Revised)
 
-1. [ ] **Phase 1.1-1.3**: Swift protocol + C header (1 day)
-2. [ ] **Phase 2**: Migrate Ghostty to protocol (1 day)
-3. [ ] **Phase 5.1-5.2**: Standalone test harness (0.5 day)
-4. [ ] **Phase 3.1-3.2**: stoa-gpui crate skeleton (1 day)
-5. [ ] **Phase 4.1**: Minimal EditorApp (1-2 days)
-6. [ ] **Phase 3.4**: Window proxy / embedding (2-3 days)
-7. [ ] **Phase 4.2-4.3**: C FFI layer (1 day)
-8. [ ] **Phase 6**: Integration testing (1 day)
+### Bead 1: stoa-app-protocol (2 days)
+- [ ] Define `StoaApp` Swift protocol
+- [ ] Define `stoa_app.h` C header
+- [ ] Refactor Ghostty wrapper to use protocol
+- [ ] Refactor WebView wrapper to use protocol
+- [ ] **Success:** Stoa works exactly as before, cleaner code
 
-**Total: ~8-10 days**
+### Bead 2: stoa-gpui-editor (5-7 days)
+- [ ] Create `~/code/stoa-gpui` crate
+- [ ] Get basic GPUI window running (standalone)
+- [ ] Add Zed's Editor + Buffer dependencies
+- [ ] Get text editing working
+- [ ] Get syntax highlighting working
+- [ ] Get vim mode working
+- [ ] Standalone test harness (`just edit file.rs`)
+- [ ] **Success:** Can edit files with vim bindings, no Swift needed
+
+### Bead 3: stoa-editor-integration (3-4 days)
+- [ ] Add IPC for Stoa ↔ Editor communication (position, focus)
+- [ ] Stoa spawns editor subprocess
+- [ ] Stoa positions editor window over pane placeholder
+- [ ] Focus forwarding works
+- [ ] **Success:** Editor pane in Stoa, can switch focus between terminal/editor
+
+### Optional Future: Static Library Mode
+- [ ] Add GPUI `run_embedded()` for in-process hosting
+- [ ] C FFI layer
+- [ ] Link as static lib instead of subprocess
+- [ ] **Maybe never needed** - subprocess might be good enough
+
+**Total: ~10-13 days**
+
+---
+
+## Beads Summary
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Bead 1: stoa-app-protocol                                   │
+│   Pure Swift refactoring. Proves interface design.          │
+│   No new functionality, just cleaner abstractions.          │
+│   ~2 days                                                    │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Bead 2: stoa-gpui-editor                                    │
+│   Pure Rust. Standalone editor binary.                      │
+│   Fastest iteration: cargo run, no Swift rebuilds.          │
+│   This is where most dev time goes.                         │
+│   ~5-7 days                                                  │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Bead 3: stoa-editor-integration                             │
+│   Subprocess + window positioning.                          │
+│   IPC between Swift and Rust.                               │
+│   ~3-4 days                                                  │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
 ## Success Criteria
 
-1. Can run `just edit somefile.rs` and edit with vim bindings
-2. Syntax highlighting works
-3. Can embed editor in Stoa pane
-4. Pane focus switches correctly between terminal/editor/webview
-5. No Zed forks, clean wrapper crate
+### Bead 1 Done When:
+- [ ] Stoa compiles and runs
+- [ ] Ghostty terminals work exactly as before
+- [ ] WebViews work exactly as before
+- [ ] Code is cleaner (protocol-based)
+
+### Bead 2 Done When:
+- [ ] `cargo run --example standalone -- somefile.rs` opens editor
+- [ ] Can type, move cursor, delete text
+- [ ] Vim bindings work (hjkl, i, esc, :w, etc.)
+- [ ] Syntax highlighting works for .rs, .swift, .ts files
+- [ ] Can save files
+- [ ] ~5 second iteration loop when editing the editor itself
+
+### Bead 3 Done When:
+- [ ] `Cmd+Shift+E` (or whatever) opens editor pane in Stoa
+- [ ] Editor pane visually aligned with Stoa pane boundaries
+- [ ] Can focus terminal, then focus editor, then focus terminal
+- [ ] Editor follows pane when Stoa window moves/resizes
+- [ ] Can have multiple editor panes (split)
+
+### Non-Goals (for now):
+- LSP / go-to-definition
+- File tree
+- Tabs
+- Project-wide search
+- Git integration
+
+These come later. First, just get a working editor pane.
