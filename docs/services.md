@@ -238,3 +238,7 @@ pub struct Editor {
 ```
 
 We implement adapters that wrap Stoa's `LspClient` and implement Zed's traits. The editor stays lean.
+
+# Other service ideas:
+
+- alert service. this would be nice for the alerts from `crank`
