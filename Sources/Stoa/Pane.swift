@@ -1,16 +1,18 @@
 import AppKit
 import Combine
 
-/// Content type for a pane - selector, terminal, or webview
+/// Content type for a pane - selector, terminal, webview, or editor
 enum PaneContent: Codable, Equatable {
     case unselected
     case terminal
     case webview(url: URL)
+    case editor(url: URL)
 }
 
 enum PaneTypeSelection: Int, CaseIterable {
     case browser
     case terminal
+    case editor
     
     var title: String {
         switch self {
@@ -18,6 +20,8 @@ enum PaneTypeSelection: Int, CaseIterable {
             return "Browser"
         case .terminal:
             return "Terminal"
+        case .editor:
+            return "Editor"
         }
     }
     
@@ -27,6 +31,8 @@ enum PaneTypeSelection: Int, CaseIterable {
             return "b"
         case .terminal:
             return "t"
+        case .editor:
+            return "e"
         }
     }
     

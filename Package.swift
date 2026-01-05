@@ -20,14 +20,23 @@ let package = Package(
             ],
             linkerSettings: [
                 .linkedFramework("Cocoa"),
+                .linkedFramework("AudioToolbox"),
+                .linkedFramework("CoreAudio"),
+                .linkedFramework("CoreMedia"),
+                .linkedFramework("CoreVideo"),
                 .linkedFramework("Metal"),
                 .linkedFramework("QuartzCore"),
                 .linkedFramework("IOSurface"),
                 .linkedFramework("Carbon"),
+                .linkedFramework("VideoToolbox"),
+                .linkedFramework("SystemConfiguration"),
                 .linkedFramework("UniformTypeIdentifiers"),
                 .unsafeFlags([
                     "-I", "Libraries/GhosttyKit.xcframework/macos-arm64_x86_64/Headers",
+                    "-I", "Libraries/ZedKit",
                     "Libraries/GhosttyKit.xcframework/macos-arm64_x86_64/libghostty.a",
+                    "Libraries/ZedKit/libz.a",
+                    "-liconv",
                     "-lc++",
                 ])
             ]

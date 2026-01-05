@@ -152,7 +152,7 @@ struct SplitNodeView: View {
     }
 }
 
-/// Renders a single pane with a selector, terminal, or webview.
+/// Renders a single pane with a selector, terminal, webview, or editor.
 struct PaneView: View {
     @ObservedObject var pane: Pane
     @ObservedObject var controller: StoaWindowController
@@ -172,6 +172,8 @@ struct PaneView: View {
                     PaneTerminalViewRepresentable(pane: pane, size: geo.size, controller: controller)
                 case .webview(let url):
                     PaneWebViewRepresentable(pane: pane, url: url, controller: controller)
+                case .editor(let url):
+                    PaneEditorViewRepresentable(pane: pane, url: url, controller: controller)
                 }
                 
                 // Focus border
@@ -203,6 +205,10 @@ struct PaneTypeSelectionView: View {
                 PaneTypeSelectionOption(
                     title: "\(PaneTypeSelection.terminal.title) [\(PaneTypeSelection.terminal.hotkey)]",
                     isSelected: selection == .terminal
+                )
+                PaneTypeSelectionOption(
+                    title: "\(PaneTypeSelection.editor.title) [\(PaneTypeSelection.editor.hotkey)]",
+                    isSelected: selection == .editor
                 )
             }
         }
@@ -289,5 +295,28 @@ struct PaneWebViewRepresentable: NSViewRepresentable {
         if webView.url != url {
             webView.load(URLRequest(url: url))
         }
+    }
+}
+
+/// NSViewRepresentable for editor panes - stores view reference in pane model
+struct PaneEditorViewRepresentable: NSViewRepresentable {
+    let pane: Pane
+    let url: URL
+    let controller: StoaWindowController
+
+    func makeNSView(context: Context) -> EditorHostView {
+        if let existingView = pane.view as? EditorHostView {
+            controller.attachEditorSession(for: pane, hostView: existingView, url: url)
+            return existingView
+        }
+
+        let hostView = EditorHostView()
+        pane.view = hostView
+        controller.attachEditorSession(for: pane, hostView: hostView, url: url)
+        return hostView
+    }
+
+    func updateNSView(_ hostView: EditorHostView, context: Context) {
+        controller.updateEditorSessionFrame(for: pane)
     }
 }

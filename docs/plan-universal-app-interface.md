@@ -91,12 +91,14 @@ The key insight: **the editor can be a separate process**, not linked into Stoa.
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Why Subprocess First?
+### Why Subprocess First? (Update: not viable on macOS)
 
-| Approach | Rebuild cycle | Complexity |
-|----------|---------------|------------|
-| Static lib in Stoa | ~30-60 sec (Rust + Swift) | High |
-| Subprocess | ~5-10 sec (Rust only) | Low |
+| Approach | Rebuild cycle | Complexity | Result |
+|----------|---------------|------------|--------|
+| Static lib in Stoa | ~30-60 sec (Rust + Swift) | High | Required |
+| Subprocess | ~5-10 sec (Rust only) | Low | **Failed** |
+
+**Outcome:** The subprocess overlay approach was implemented and is unreliable on macOS. Accessibility APIs cannot consistently reposition/resize GPUI windows, which leaves a separate editor window instead of a pane. We are dropping this path and proceeding with embedded GPUI + FFI.
 
 ### Iteration Workflow
 
@@ -114,13 +116,13 @@ cargo run --example standalone -- src/editor_app.rs
 # Save, Ctrl-C, up-arrow, enter → 5 second loop
 ```
 
-### Integration Phases
+### Integration Phases (Revised)
 
 1. **Phase A: Standalone binary** - Just get the editor running in its own window
-2. **Phase B: Subprocess mode** - Stoa spawns editor, positions its window
-3. **Phase C (optional): Static lib** - Link into Stoa for tighter integration
+2. **Phase B: Embedded GPUI** - Add `run_embedded()` and C FFI layer
+3. **Phase C: Universal app interface** - Stoa hosts the editor in-process
 
-We may never need Phase C. Subprocess mode might be good enough forever.
+Subprocess mode was attempted and is not viable for a stable UX on macOS.
 
 ---
 
@@ -152,13 +154,10 @@ gpui::App::new().run_embedded(|cx| { ... });
 
 ### What "Embedded" Means in Practice
 
-For the subprocess approach, we don't even need true embedding initially:
-1. Editor subprocess creates its own GPUI window (borderless, no titlebar)
-2. Stoa tells editor (via IPC) where to position itself
-3. Editor moves its window to overlay Stoa's pane area
-4. Focus: Stoa tells editor when to activate/deactivate
-
-This gives us a working editor pane with minimal GPUI surgery.
+For a reliable editor pane, we need true embedding:
+1. Stoa owns the window and NSApp loop.
+2. GPUI runs in embedded mode and renders into a host view.
+3. Input/focus is handled in-process (no AX window hacks).
 
 ### GPUI Changes Required (Small!)
 
@@ -1074,18 +1073,11 @@ Test: Does `vim::init(cx)` work when Editor is created in embedded surface?
 - [ ] Standalone test harness (`just edit file.rs`)
 - [ ] **Success:** Can edit files with vim bindings, no Swift needed
 
-### Bead 3: stoa-editor-integration (3-4 days)
-- [ ] Add IPC for Stoa ↔ Editor communication (position, focus)
-- [ ] Stoa spawns editor subprocess
-- [ ] Stoa positions editor window over pane placeholder
-- [ ] Focus forwarding works
-- [ ] **Success:** Editor pane in Stoa, can switch focus between terminal/editor
-
-### Optional Future: Static Library Mode
+### Bead 3: stoa-editor-integration (Revised, 4-6 days)
 - [ ] Add GPUI `run_embedded()` for in-process hosting
-- [ ] C FFI layer
-- [ ] Link as static lib instead of subprocess
-- [ ] **Maybe never needed** - subprocess might be good enough
+- [ ] C FFI layer for editor surface + input
+- [ ] Link as static lib and host in Stoa
+- [ ] **Success:** Editor pane in Stoa with no extra windows
 
 **Total: ~10-13 days**
 
@@ -1113,9 +1105,9 @@ Test: Does `vim::init(cx)` work when Editor is created in embedded surface?
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │ Bead 3: stoa-editor-integration                             │
-│   Subprocess + window positioning.                          │
-│   IPC between Swift and Rust.                               │
-│   ~3-4 days                                                  │
+│   Embedded GPUI + C FFI.                                    │
+│   No subprocess windows.                                    │
+│   ~4-6 days                                                  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
