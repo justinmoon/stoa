@@ -12,6 +12,7 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
     
     let ghosttyApp: GhosttyApp
     private var eventMonitor: Any?
+    private var editorSessions: [UUID: EditorEmbeddedSession] = [:]
     
     var focusedPane: Pane? {
         guard let id = focusedPaneId else { return nil }
@@ -87,8 +88,11 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
     
     func focusPane(_ pane: Pane) {
         focusedPaneId = pane.id
-        if let view = pane.app?.view {
+        if let view = pane.view ?? pane.app?.view {
             window?.makeFirstResponder(view)
+        }
+        if case .editor = pane.content {
+            editorSessions[pane.id]?.focus()
         }
     }
     
@@ -176,6 +180,55 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
             }
         }
     }
+
+    private func openEditor(in pane: Pane) {
+        if let envPath = ProcessInfo.processInfo.environment["STOA_EDITOR_FILE"] {
+            let url = URL(fileURLWithPath: envPath)
+            createEditorPane(in: pane, url: url)
+            return
+        }
+
+        if let clipboardURL = getFileURLFromClipboard() {
+            createEditorPane(in: pane, url: clipboardURL)
+            return
+        }
+
+        createEditorPane(in: pane, url: defaultEditorFileURL())
+    }
+
+    private func getFileURLFromClipboard() -> URL? {
+        let pasteboard = NSPasteboard.general
+        if let urlString = pasteboard.string(forType: .string) {
+            let expanded = (urlString as NSString).expandingTildeInPath
+            let url = URL(fileURLWithPath: expanded)
+            if FileManager.default.fileExists(atPath: url.path) {
+                return url
+            }
+        }
+        return nil
+    }
+
+    private func defaultEditorFileURL() -> URL {
+        let tempDir = FileManager.default.temporaryDirectory
+        let filename = "stoa-editor-\(UUID().uuidString).txt"
+        let url = tempDir.appendingPathComponent(filename)
+        if !FileManager.default.fileExists(atPath: url.path) {
+            try? "".write(to: url, atomically: true, encoding: .utf8)
+        }
+        return url
+    }
+
+    private func createEditorPane(in pane: Pane, url: URL) {
+        pane.content = .editor(url: url)
+        DispatchQueue.main.async { [weak self] in
+            self?.focusPane(pane)
+        }
+    }
+
+    func openEditorForTest(url: URL) {
+        guard let pane = focusedPane else { return }
+        createEditorPane(in: pane, url: url)
+    }
     
     private func promptForBrowserURL(defaultValue: String? = nil, completion: @escaping (URL) -> Void) {
         guard let window else { return }
@@ -246,7 +299,7 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
                 }
             }
             return true
-        case .terminal, .unselected:
+        case .terminal, .unselected, .editor:
             return false
         }
     }
@@ -272,6 +325,9 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
     
     func closePane() {
         guard let current = focusedPane else { return }
+        if case .editor = current.content {
+            removeEditorSession(for: current)
+        }
         current.app?.destroy()
         current.app = nil
         
@@ -403,6 +459,9 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
         case "t":
             applyPaneSelection(.terminal, to: pane)
             return true
+        case "e":
+            applyPaneSelection(.editor, to: pane)
+            return true
         default:
             return false
         }
@@ -424,6 +483,9 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
             DispatchQueue.main.async { [weak self] in
                 self?.focusPane(pane)
             }
+        case .editor:
+            pane.pendingSelection = .editor
+            openEditor(in: pane)
         }
     }
 
@@ -462,6 +524,10 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
             pane.app?.destroy()
             pane.app = makeChromiumApp(url: url, size: size)
             return pane.app
+        case .editor:
+            pane.app?.destroy()
+            pane.app = nil
+            return nil
         }
     }
 
@@ -495,6 +561,39 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
             self?.handleKeyDown(event) ?? false
         }
         return chromiumView
+    }
+
+    // MARK: - Editor Session
+
+    func attachEditorSession(for pane: Pane, hostView: EditorHostView, url: URL) {
+        if let session = editorSessions[pane.id] {
+            try? session.attach(hostView: hostView)
+            return
+        }
+
+        do {
+            let session = try EditorEmbeddedSession(paneId: pane.id, fileURL: url, hostView: hostView)
+            editorSessions[pane.id] = session
+        } catch {
+            print("Failed to launch editor: \(error)")
+        }
+    }
+
+    func updateEditorSessionFrame(for pane: Pane) {
+        editorSessions[pane.id]?.updateFrame()
+    }
+
+    func removeEditorSession(for pane: Pane) {
+        editorSessions[pane.id]?.shutdown()
+        editorSessions.removeValue(forKey: pane.id)
+    }
+
+    func setEditorText(for pane: Pane, text: String) -> Bool {
+        editorSessions[pane.id]?.setText(text) ?? false
+    }
+
+    func saveEditor(for pane: Pane) -> Bool {
+        editorSessions[pane.id]?.save() ?? false
     }
     
     // MARK: - NSWindowDelegate
