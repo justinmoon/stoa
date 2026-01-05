@@ -1057,14 +1057,14 @@ Test: Does `vim::init(cx)` work when Editor is created in embedded surface?
 
 ## Implementation Order (Revised)
 
-### Bead 1: stoa-app-protocol (2 days)
+### Phase 1: stoa-app-protocol (2 days)
 - [ ] Define `StoaApp` Swift protocol
 - [ ] Define `stoa_app.h` C header
 - [ ] Refactor Ghostty wrapper to use protocol
 - [ ] Refactor WebView wrapper to use protocol
 - [ ] **Success:** Stoa works exactly as before, cleaner code
 
-### Bead 2: stoa-gpui-editor (5-7 days)
+### Phase 2: stoa-gpui-editor (5-7 days)
 - [ ] Create `~/code/stoa-gpui` crate
 - [ ] Get basic GPUI window running (standalone)
 - [ ] Add Zed's Editor + Buffer dependencies
@@ -1074,7 +1074,7 @@ Test: Does `vim::init(cx)` work when Editor is created in embedded surface?
 - [ ] Standalone test harness (`just edit file.rs`)
 - [ ] **Success:** Can edit files with vim bindings, no Swift needed
 
-### Bead 3: stoa-editor-integration (3-4 days)
+### Phase 3: stoa-editor-integration (3-4 days)
 - [ ] Add IPC for Stoa ↔ Editor communication (position, focus)
 - [ ] Stoa spawns editor subprocess
 - [ ] Stoa positions editor window over pane placeholder
@@ -1091,11 +1091,11 @@ Test: Does `vim::init(cx)` work when Editor is created in embedded surface?
 
 ---
 
-## Beads Summary
+## Phase Summary
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Bead 1: stoa-app-protocol                                   │
+│ Phase 1: stoa-app-protocol                                  │
 │   Pure Swift refactoring. Proves interface design.          │
 │   No new functionality, just cleaner abstractions.          │
 │   ~2 days                                                    │
@@ -1103,7 +1103,7 @@ Test: Does `vim::init(cx)` work when Editor is created in embedded surface?
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ Bead 2: stoa-gpui-editor                                    │
+│ Phase 2: stoa-gpui-editor                                   │
 │   Pure Rust. Standalone editor binary.                      │
 │   Fastest iteration: cargo run, no Swift rebuilds.          │
 │   This is where most dev time goes.                         │
@@ -1112,7 +1112,7 @@ Test: Does `vim::init(cx)` work when Editor is created in embedded surface?
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ Bead 3: stoa-editor-integration                             │
+│ Phase 3: stoa-editor-integration                            │
 │   Subprocess + window positioning.                          │
 │   IPC between Swift and Rust.                               │
 │   ~3-4 days                                                  │
@@ -1123,13 +1123,13 @@ Test: Does `vim::init(cx)` work when Editor is created in embedded surface?
 
 ## Success Criteria
 
-### Bead 1 Done When:
+### Phase 1 Done When:
 - [ ] Stoa compiles and runs
 - [ ] Ghostty terminals work exactly as before
 - [ ] WebViews work exactly as before
 - [ ] Code is cleaner (protocol-based)
 
-### Bead 2 Done When:
+### Phase 2 Done When:
 - [ ] `cargo run --example standalone -- somefile.rs` opens editor
 - [ ] Can type, move cursor, delete text
 - [ ] Vim bindings work (hjkl, i, esc, :w, etc.)
@@ -1137,7 +1137,7 @@ Test: Does `vim::init(cx)` work when Editor is created in embedded surface?
 - [ ] Can save files
 - [ ] ~5 second iteration loop when editing the editor itself
 
-### Bead 3 Done When:
+### Phase 3 Done When:
 - [ ] `Cmd+Shift+E` (or whatever) opens editor pane in Stoa
 - [ ] Editor pane visually aligned with Stoa pane boundaries
 - [ ] Can focus terminal, then focus editor, then focus terminal

@@ -1,12 +1,17 @@
 import AppKit
 import WebKit
+import StoaKit
 
 /// Custom WKWebView subclass that suppresses beeps for unhandled key events
-class StoaWebView: WKWebView {
+class StoaWebView: WKWebView, StoaApp {
+    static var appType: String { "webkit" }
+    
     private var currentZoomLevel: CGFloat = 1.0
     
     /// Callback for intercepting key events (for Stoa keybindings)
     var onKeyDown: ((NSEvent) -> Bool)?
+    var onEvent: ((StoaAppEvent) -> Void)?
+    var shouldInterceptKey: ((NSEvent) -> Bool)?
     
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         // Let the menu system handle standard shortcuts like Cmd+Q
@@ -15,6 +20,9 @@ class StoaWebView: WKWebView {
         }
         
         // Let Stoa handle its keybindings first
+        if let handler = shouldInterceptKey, handler(event) {
+            return true
+        }
         if let handler = onKeyDown, handler(event) {
             return true
         }
@@ -48,6 +56,12 @@ class StoaWebView: WKWebView {
     }
     
     override var acceptsFirstResponder: Bool { true }
+
+    func destroy() {
+        stopLoading()
+        navigationDelegate = nil
+        uiDelegate = nil
+    }
     
     // MARK: - Zoom Handling
     

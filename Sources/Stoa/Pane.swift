@@ -1,21 +1,26 @@
 import AppKit
 import Combine
+import StoaKit
 
-/// Content type for a pane - selector, terminal, or webview
+/// Content type for a pane - selector, terminal, or browser.
 enum PaneContent: Codable, Equatable {
     case unselected
     case terminal
     case webview(url: URL)
+    case chromium(url: URL)
 }
 
 enum PaneTypeSelection: Int, CaseIterable {
-    case browser
+    case chromium
+    case webkit
     case terminal
     
     var title: String {
         switch self {
-        case .browser:
-            return "Browser"
+        case .chromium:
+            return "Chromium"
+        case .webkit:
+            return "WebKit"
         case .terminal:
             return "Terminal"
         }
@@ -23,8 +28,10 @@ enum PaneTypeSelection: Int, CaseIterable {
     
     var hotkey: String {
         switch self {
-        case .browser:
-            return "b"
+        case .chromium:
+            return "c"
+        case .webkit:
+            return "w"
         case .terminal:
             return "t"
         }
@@ -49,8 +56,8 @@ class Pane: Identifiable, Codable, ObservableObject {
     @Published var content: PaneContent
     @Published var pendingSelection: PaneTypeSelection = .terminal
     
-    /// The actual NSView backing this pane (not Codable, recreated on restore)
-    weak var view: NSView?
+    /// The actual app backing this pane (not Codable, recreated on restore)
+    weak var app: StoaApp?
     
     init(id: UUID = UUID(), content: PaneContent = .unselected) {
         self.id = id

@@ -25,6 +25,14 @@ copy-libghostty: build-libghostty
     cp "{{ghostty_dir}}/include/ghostty.h" Libraries/include/
     echo "Copied GhosttyKit.xcframework to Libraries/"
 
+# Fetch CEF SDK into Libraries/CEF (requires cefzig)
+fetch-cef:
+    ./scripts/fetch_cef.sh
+
+# E2E: launch Chromium pane and verify a rendered frame is produced
+e2e-chromium:
+    ./scripts/e2e_chromium_render.py
+
 # Build the Stoa app
 build: copy-libghostty
     swift build
@@ -35,11 +43,18 @@ build-release: copy-libghostty
 
 # Run Stoa
 run: build
-    swift run stoa
+    bin_path="$(swift build --show-bin-path)"; \
+    DYLD_FRAMEWORK_PATH="$PWD/Libraries/CEF" \
+      DYLD_LIBRARY_PATH="$PWD/Libraries/CEF/Chromium Embedded Framework.framework/Libraries" \
+      "$bin_path/stoa"
 
 # Run tests
 test:
     swift test
+
+# Run all checks before merging
+pre-merge: check-deps test e2e-chromium
+    @echo "Pre-merge checks complete."
 
 # Clean build artifacts
 clean:

@@ -1,5 +1,8 @@
 // swift-tools-version: 5.9
+import Foundation
 import PackageDescription
+
+let packageRoot = FileManager.default.currentDirectoryPath
 
 let package = Package(
     name: "Stoa",
@@ -13,7 +16,7 @@ let package = Package(
         // Main Stoa application
         .executableTarget(
             name: "Stoa",
-            dependencies: ["StoaKit"],
+            dependencies: ["StoaCEF", "StoaKit"],
             path: "Sources/Stoa",
             swiftSettings: [
                 .unsafeFlags(["-import-objc-header", "Sources/Stoa/BridgingHeader.h"])
@@ -28,6 +31,8 @@ let package = Package(
                 .unsafeFlags([
                     "-I", "Libraries/GhosttyKit.xcframework/macos-arm64_x86_64/Headers",
                     "Libraries/GhosttyKit.xcframework/macos-arm64_x86_64/libghostty.a",
+                    "-F", "\(packageRoot)/Libraries/CEF",
+                    "-framework", "Chromium Embedded Framework",
                     "-lc++",
                 ])
             ]
@@ -37,6 +42,23 @@ let package = Package(
         .target(
             name: "StoaKit",
             path: "Sources/StoaKit"
+        ),
+
+        .target(
+            name: "StoaCEF",
+            path: "Sources/StoaCEF",
+            publicHeadersPath: "include",
+            cxxSettings: [
+                .headerSearchPath("../../Libraries/CEF"),
+                .unsafeFlags(["-std=c++17"])
+            ],
+            linkerSettings: [
+                .unsafeFlags([
+                    "-F", "\(packageRoot)/Libraries/CEF",
+                    "-framework", "Chromium Embedded Framework",
+                    "-lc++",
+                ])
+            ]
         ),
         
         .testTarget(

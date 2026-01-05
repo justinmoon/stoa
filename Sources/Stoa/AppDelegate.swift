@@ -21,7 +21,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.async {
             NSApp.activate(ignoringOtherApps: true)
             if let pane = self.windowController?.focusedPane,
-               let view = pane.view {
+               let view = pane.app?.view {
                 self.windowController?.window?.makeFirstResponder(view)
             }
         }
@@ -29,5 +29,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return true
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        ChromiumRuntime.shared.shutdown()
     }
 }

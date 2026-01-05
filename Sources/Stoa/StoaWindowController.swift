@@ -1,11 +1,14 @@
 import AppKit
 import SwiftUI
+import WebKit
+import StoaKit
 
 /// Main window controller: manages split tree state, focus, and keybindings.
 class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObject {
     @Published var splitTree: SplitTree
     @Published var focusedPaneId: UUID?
     @Published var isShowingURLPrompt = false
+    @Published var isShowingHelp = false
     
     let ghosttyApp: GhosttyApp
     private var eventMonitor: Any?
@@ -17,9 +20,21 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
     
     init(ghosttyApp: GhosttyApp) {
         self.ghosttyApp = ghosttyApp
+        if ProcessInfo.processInfo.environment["STOA_CHROMIUM_DEBUG"] == "1" {
+            let autostart = ProcessInfo.processInfo.environment["STOA_CHROMIUM_AUTOSTART_URL"] ?? "nil"
+            NSLog("StoaWindowController init, autostart=%@", autostart)
+        }
         
         // Create initial pane
         let initialPane = Pane()
+        if let urlString = ProcessInfo.processInfo.environment["STOA_CHROMIUM_AUTOSTART_URL"],
+           let url = URL(string: urlString) {
+            if ProcessInfo.processInfo.environment["STOA_CHROMIUM_DEBUG"] == "1" {
+                NSLog("Autostart Chromium URL: %@", url.absoluteString)
+            }
+            initialPane.content = .chromium(url: url)
+            initialPane.pendingSelection = .chromium
+        }
         self.splitTree = SplitTree(pane: initialPane)
         self.focusedPaneId = initialPane.id
         
@@ -63,7 +78,6 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
     private func setupContentView() {
         let contentView = NSHostingView(rootView:
             SplitTreeView(controller: self)
-                .environmentObject(ghosttyApp)
                 .environmentObject(self)
         )
         window?.contentView = contentView
@@ -73,7 +87,7 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
     
     func focusPane(_ pane: Pane) {
         focusedPaneId = pane.id
-        if let view = pane.view {
+        if let view = pane.app?.view {
             window?.makeFirstResponder(view)
         }
     }
@@ -111,14 +125,14 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
         }
     }
     
-    // MARK: - WebView Split
+    // MARK: - WebKit Split
     
     func splitWebView(direction: SplitTree.NewDirection = .right) {
         // Try to get URL from clipboard first
         if let clipboardURL = getURLFromClipboard() {
             createWebViewSplit(url: clipboardURL, direction: direction)
         } else {
-            promptForWebViewURL { [weak self] url in
+            promptForBrowserURL { [weak self] url in
                 self?.createWebViewSplit(url: url, direction: direction)
             }
         }
@@ -134,16 +148,28 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
         return nil
     }
     
-    private func openWebView(in pane: Pane) {
+    private func openWebKit(in pane: Pane) {
+        openBrowser(in: pane) { url in .webview(url: url) }
+    }
+    
+    private func openChromium(in pane: Pane) {
+        openBrowser(in: pane) { url in .chromium(url: url) }
+    }
+    
+    private func openBrowser(in pane: Pane, makeContent: @escaping (URL) -> PaneContent) {
         if let clipboardURL = getURLFromClipboard() {
-            pane.content = .webview(url: clipboardURL)
+            pane.content = makeContent(clipboardURL)
+            pane.app?.destroy()
+            pane.app = nil
             DispatchQueue.main.async { [weak self] in
                 self?.focusPane(pane)
             }
         } else {
-            promptForWebViewURL { [weak self, weak pane] url in
+            promptForBrowserURL { [weak self, weak pane] url in
                 guard let pane else { return }
-                pane.content = .webview(url: url)
+                pane.content = makeContent(url)
+                pane.app?.destroy()
+                pane.app = nil
                 DispatchQueue.main.async { [weak self] in
                     self?.focusPane(pane)
                 }
@@ -151,7 +177,7 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
         }
     }
     
-    private func promptForWebViewURL(completion: @escaping (URL) -> Void) {
+    private func promptForBrowserURL(defaultValue: String? = nil, completion: @escaping (URL) -> Void) {
         guard let window else { return }
         let alert = NSAlert()
         alert.messageText = "Open Web Page"
@@ -161,7 +187,7 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
         
         let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
         textField.placeholderString = "https://example.com"
-        textField.stringValue = "https://"
+        textField.stringValue = defaultValue?.isEmpty == false ? defaultValue! : "https://"
         alert.accessoryView = textField
         
         isShowingURLPrompt = true
@@ -183,6 +209,53 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
         // Focus the text field
         alert.window.makeFirstResponder(textField)
     }
+
+    private func showAddressPrompt() -> Bool {
+        if isShowingURLPrompt {
+            return true
+        }
+        guard let pane = focusedPane else { return false }
+        switch pane.content {
+        case .webview(let url):
+            promptForBrowserURL(defaultValue: url.absoluteString) { [weak self, weak pane] newURL in
+                guard let pane else { return }
+                pane.content = .webview(url: newURL)
+                if let app = pane.app as? StoaWebView {
+                    app.load(URLRequest(url: newURL))
+                } else {
+                    pane.app?.destroy()
+                    pane.app = nil
+                }
+                DispatchQueue.main.async { [weak self] in
+                    self?.focusPane(pane)
+                }
+            }
+            return true
+        case .chromium(let url):
+            promptForBrowserURL(defaultValue: url.absoluteString) { [weak self, weak pane] newURL in
+                guard let pane else { return }
+                pane.content = .chromium(url: newURL)
+                if let app = pane.app as? ChromiumView {
+                    app.loadURL(newURL)
+                } else {
+                    pane.app?.destroy()
+                    pane.app = nil
+                }
+                DispatchQueue.main.async { [weak self] in
+                    self?.focusPane(pane)
+                }
+            }
+            return true
+        case .terminal, .unselected:
+            return false
+        }
+    }
+
+    private func isHelpToggleEvent(_ event: NSEvent) -> Bool {
+        guard event.modifierFlags.contains(.command) else { return false }
+        guard let chars = event.charactersIgnoringModifiers else { return false }
+        return chars == "/"
+    }
     
     private func createWebViewSplit(url: URL, direction: SplitTree.NewDirection) {
         guard let current = focusedPane else { return }
@@ -199,6 +272,8 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
     
     func closePane() {
         guard let current = focusedPane else { return }
+        current.app?.destroy()
+        current.app = nil
         
         // Find next pane to focus before removing
         let nextFocus = splitTree.focusTarget(from: current, direction: .right)
@@ -221,6 +296,13 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
     // MARK: - Keyboard Handling
     
     func handleKeyDown(_ event: NSEvent) -> Bool {
+        if isShowingHelp {
+            if isHelpToggleEvent(event) || event.keyCode == 53 {
+                isShowingHelp = false
+            }
+            return true
+        }
+
         if let pane = focusedPane,
            case .unselected = pane.content,
            handlePaneTypeSelectionKeyDown(event, pane: pane) {
@@ -228,6 +310,11 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
         }
         
         guard event.modifierFlags.contains(.command) else { return false }
+
+        if isHelpToggleEvent(event) {
+            isShowingHelp = true
+            return true
+        }
         
         let hasShift = event.modifierFlags.contains(.shift)
         let keyCode = event.keyCode
@@ -238,9 +325,11 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
         // Cmd+Shift combinations
         if hasShift {
             switch keyCode {
-            case 13:  // Cmd+Shift+W - Open webview split
+            case 13:  // Cmd+Shift+W - Open WebKit split
                 splitWebView()
                 return true
+            case 37:  // Cmd+Shift+L - Address bar
+                return showAddressPrompt()
             default:
                 return false
             }
@@ -305,8 +394,11 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
         case "j":
             pane.pendingSelection = pane.pendingSelection.next()
             return true
-        case "b":
-            applyPaneSelection(.browser, to: pane)
+        case "c":
+            applyPaneSelection(.chromium, to: pane)
+            return true
+        case "w":
+            applyPaneSelection(.webkit, to: pane)
             return true
         case "t":
             applyPaneSelection(.terminal, to: pane)
@@ -318,16 +410,91 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
     
     private func applyPaneSelection(_ selection: PaneTypeSelection, to pane: Pane) {
         switch selection {
-        case .browser:
-            pane.pendingSelection = .browser
-            openWebView(in: pane)
+        case .chromium:
+            pane.pendingSelection = .chromium
+            openChromium(in: pane)
+        case .webkit:
+            pane.pendingSelection = .webkit
+            openWebKit(in: pane)
         case .terminal:
             pane.pendingSelection = .terminal
             pane.content = .terminal
+            pane.app?.destroy()
+            pane.app = nil
             DispatchQueue.main.async { [weak self] in
                 self?.focusPane(pane)
             }
         }
+    }
+
+    // MARK: - App Creation
+
+    func ensureApp(for pane: Pane, size: CGSize) -> StoaApp? {
+        switch pane.content {
+        case .unselected:
+            pane.app?.destroy()
+            pane.app = nil
+            return nil
+        case .terminal:
+            if let app = pane.app as? TerminalSurfaceView {
+                return app
+            }
+            pane.app?.destroy()
+            pane.app = makeTerminalApp()
+            return pane.app
+        case .webview(let url):
+            if let app = pane.app as? StoaWebView {
+                if app.url != url {
+                    app.load(URLRequest(url: url))
+                }
+                return app
+            }
+            pane.app?.destroy()
+            pane.app = makeWebKitApp(url: url)
+            return pane.app
+        case .chromium(let url):
+            if let app = pane.app as? ChromiumView {
+                if app.currentURL != url {
+                    app.loadURL(url)
+                }
+                return app
+            }
+            pane.app?.destroy()
+            pane.app = makeChromiumApp(url: url, size: size)
+            return pane.app
+        }
+    }
+
+    private func makeTerminalApp() -> StoaApp? {
+        guard let app = ghosttyApp.app else {
+            return nil
+        }
+        let terminalView = TerminalSurfaceView(app: app)
+        terminalView.shouldInterceptKey = { [weak self] event in
+            self?.handleKeyDown(event) ?? false
+        }
+        return terminalView
+    }
+
+    private func makeWebKitApp(url: URL) -> StoaApp {
+        let config = WKWebViewConfiguration()
+        config.preferences.javaScriptCanOpenWindowsAutomatically = true
+        config.preferences.setValue(true, forKey: "developerExtrasEnabled")
+        let webView = StoaWebView(frame: .zero, configuration: config)
+        webView.allowsMagnification = true
+        webView.shouldInterceptKey = { [weak self] event in
+            self?.handleKeyDown(event) ?? false
+        }
+        webView.load(URLRequest(url: url))
+        return webView
+    }
+
+    private func makeChromiumApp(url: URL, size: CGSize) -> StoaApp {
+        let chromiumView = ChromiumView(initialURL: url, initialSize: size)
+        chromiumView.shouldInterceptKey = { [weak self] event in
+            self?.handleKeyDown(event) ?? false
+        }
+        return chromiumView
     }
     
     // MARK: - NSWindowDelegate
