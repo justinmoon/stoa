@@ -1,17 +1,24 @@
 import SwiftUI
-import WebKit
+import StoaKit
 
 /// Renders a SplitTree recursively with resizable dividers.
 struct SplitTreeView: View {
     @ObservedObject var controller: StoaWindowController
-    @EnvironmentObject var ghosttyApp: GhosttyApp
     
     var body: some View {
-        Group {
-            if let root = controller.splitTree.root {
-                NodeView(node: root, controller: controller)
-            } else {
-                Color.black
+        ZStack {
+            Group {
+                if let root = controller.splitTree.root {
+                    NodeView(node: root, controller: controller)
+                } else {
+                    Color.black
+                }
+            }
+            if controller.isShowingHelp {
+                HotkeyHelpOverlay(isPresented: Binding(
+                    get: { controller.isShowingHelp },
+                    set: { controller.isShowingHelp = $0 }
+                ))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -152,11 +159,10 @@ struct SplitNodeView: View {
     }
 }
 
-/// Renders a single pane with a selector, terminal, or webview.
+/// Renders a single pane with a selector, terminal, or browser.
 struct PaneView: View {
     @ObservedObject var pane: Pane
     @ObservedObject var controller: StoaWindowController
-    @EnvironmentObject var ghosttyApp: GhosttyApp
     
     private var isFocused: Bool {
         controller.focusedPaneId == pane.id
@@ -168,10 +174,8 @@ struct PaneView: View {
                 switch pane.content {
                 case .unselected:
                     PaneTypeSelectionView(selection: pane.pendingSelection)
-                case .terminal:
-                    PaneTerminalViewRepresentable(pane: pane, size: geo.size, controller: controller)
-                case .webview(let url):
-                    PaneWebViewRepresentable(pane: pane, url: url, controller: controller)
+                case .terminal, .webview, .chromium:
+                    PaneAppViewRepresentable(pane: pane, size: geo.size, controller: controller)
                 }
                 
                 // Focus border
@@ -196,14 +200,12 @@ struct PaneTypeSelectionView: View {
     var body: some View {
         ZStack {
             VStack(spacing: 12) {
-                PaneTypeSelectionOption(
-                    title: "\(PaneTypeSelection.browser.title) [\(PaneTypeSelection.browser.hotkey)]",
-                    isSelected: selection == .browser
-                )
-                PaneTypeSelectionOption(
-                    title: "\(PaneTypeSelection.terminal.title) [\(PaneTypeSelection.terminal.hotkey)]",
-                    isSelected: selection == .terminal
-                )
+                ForEach(PaneTypeSelection.allCases, id: \.rawValue) { option in
+                    PaneTypeSelectionOption(
+                        title: "\(option.title) [\(option.hotkey)]",
+                        isSelected: selection == option
+                    )
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -231,63 +233,129 @@ struct PaneTypeSelectionOption: View {
     }
 }
 
-/// NSViewRepresentable for terminal panes - creates view on demand and stores reference in pane model
-struct PaneTerminalViewRepresentable: NSViewRepresentable {
+private struct HotkeyHelpOverlay: View {
+    @Binding var isPresented: Bool
+
+    private struct HotkeyItem: Identifiable {
+        let id = UUID()
+        let keys: String
+        let action: String
+    }
+
+    private struct HotkeySection: Identifiable {
+        let id = UUID()
+        let title: String
+        let items: [HotkeyItem]
+    }
+
+    private let sections: [HotkeySection] = [
+        HotkeySection(title: "Layout", items: [
+            HotkeyItem(keys: "Cmd+\\", action: "Split horizontally"),
+            HotkeyItem(keys: "Cmd+-", action: "Split vertically"),
+            HotkeyItem(keys: "Cmd+W", action: "Close pane")
+        ]),
+        HotkeySection(title: "Focus", items: [
+            HotkeyItem(keys: "Cmd+H", action: "Focus left"),
+            HotkeyItem(keys: "Cmd+J", action: "Focus down"),
+            HotkeyItem(keys: "Cmd+K", action: "Focus up"),
+            HotkeyItem(keys: "Cmd+L", action: "Focus right")
+        ]),
+        HotkeySection(title: "Browser", items: [
+            HotkeyItem(keys: "Cmd+Shift+W", action: "Split WebKit"),
+            HotkeyItem(keys: "Cmd+Shift+L", action: "Open address bar")
+        ]),
+        HotkeySection(title: "Pane Selection", items: [
+            HotkeyItem(keys: "J/K or Up/Down", action: "Cycle pane type"),
+            HotkeyItem(keys: "C / W / T", action: "Pick Chromium / WebKit / Terminal"),
+            HotkeyItem(keys: "Enter", action: "Confirm selection")
+        ]),
+        HotkeySection(title: "Help", items: [
+            HotkeyItem(keys: "Cmd+/", action: "Toggle help"),
+            HotkeyItem(keys: "Esc", action: "Close help")
+        ])
+    ]
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.65)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    isPresented = false
+                }
+
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Stoa Hotkeys")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.white)
+
+                ForEach(sections) { section in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(section.title)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.9))
+                        ForEach(section.items) { item in
+                            HStack(alignment: .top, spacing: 12) {
+                                Text(item.keys)
+                                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                    .foregroundColor(.white)
+                                    .frame(width: 150, alignment: .leading)
+                                Text(item.action)
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.white.opacity(0.9))
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(24)
+            .background(Color.black.opacity(0.9))
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
+            )
+            .padding(32)
+        }
+    }
+}
+
+/// NSViewRepresentable for app panes - stores app reference in pane model
+struct PaneAppViewRepresentable: NSViewRepresentable {
     let pane: Pane
     let size: CGSize
     let controller: StoaWindowController
     
-    func makeNSView(context: Context) -> TerminalSurfaceView {
-        // Reuse existing view if available
-        if let existingView = pane.view as? TerminalSurfaceView {
-            return existingView
-        }
-        
-        // Create new terminal view
-        guard let app = controller.ghosttyApp.app else {
-            fatalError("GhosttyApp not initialized")
-        }
-        
-        let terminalView = TerminalSurfaceView(app: app)
-        terminalView.onKeyDown = { [weak controller] event in
-            controller?.handleKeyDown(event) ?? false
-        }
-        pane.view = terminalView
-        return terminalView
+    func makeNSView(context: Context) -> PaneAppContainerView {
+        let container = PaneAppContainerView()
+        container.updateApp(pane: pane, controller: controller, size: size)
+        return container
     }
     
-    func updateNSView(_ terminalView: TerminalSurfaceView, context: Context) {
-        // Always update frame - SwiftUI will call this when size changes
-        terminalView.frame = CGRect(origin: .zero, size: size)
-        terminalView.updateSurfaceSize()
+    func updateNSView(_ container: PaneAppContainerView, context: Context) {
+        container.updateApp(pane: pane, controller: controller, size: size)
     }
 }
 
-/// NSViewRepresentable for webview panes - stores view reference in pane model
-struct PaneWebViewRepresentable: NSViewRepresentable {
-    let pane: Pane
-    let url: URL
-    let controller: StoaWindowController
+final class PaneAppContainerView: NSView {
+    private weak var currentApp: StoaApp?
     
-    func makeNSView(context: Context) -> StoaWebView {
-        let config = WKWebViewConfiguration()
-        config.preferences.javaScriptCanOpenWindowsAutomatically = true
-        config.preferences.setValue(true, forKey: "developerExtrasEnabled")
-        
-        let webView = StoaWebView(frame: .zero, configuration: config)
-        webView.allowsMagnification = true
-        webView.onKeyDown = { [weak controller] event in
-            controller?.handleKeyDown(event) ?? false
+    func updateApp(pane: Pane, controller: StoaWindowController, size: CGSize) {
+        let app = controller.ensureApp(for: pane, size: size)
+        if currentApp !== app {
+            subviews.forEach { $0.removeFromSuperview() }
+            if let appView = app?.view {
+                appView.frame = bounds
+                appView.autoresizingMask = [.width, .height]
+                addSubview(appView)
+            }
+            currentApp = app
+        } else if let appView = app?.view {
+            appView.frame = bounds
         }
-        webView.load(URLRequest(url: url))
-        pane.view = webView
-        return webView
     }
     
-    func updateNSView(_ webView: StoaWebView, context: Context) {
-        // Only reload if URL changed
-        if webView.url != url {
-            webView.load(URLRequest(url: url))
-        }
+    override func layout() {
+        super.layout()
+        currentApp?.view.frame = bounds
     }
 }
