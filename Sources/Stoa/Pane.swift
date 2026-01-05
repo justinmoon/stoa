@@ -1,20 +1,58 @@
 import AppKit
+import Combine
 
-/// Content type for a pane - either terminal or webview
+/// Content type for a pane - selector, terminal, or webview
 enum PaneContent: Codable, Equatable {
+    case unselected
     case terminal
     case webview(url: URL)
 }
 
+enum PaneTypeSelection: Int, CaseIterable {
+    case browser
+    case terminal
+    
+    var title: String {
+        switch self {
+        case .browser:
+            return "Browser"
+        case .terminal:
+            return "Terminal"
+        }
+    }
+    
+    var hotkey: String {
+        switch self {
+        case .browser:
+            return "b"
+        case .terminal:
+            return "t"
+        }
+    }
+    
+    func next() -> PaneTypeSelection {
+        let all = Self.allCases
+        let index = (rawValue + 1) % all.count
+        return all[index]
+    }
+    
+    func previous() -> PaneTypeSelection {
+        let all = Self.allCases
+        let index = (rawValue - 1 + all.count) % all.count
+        return all[index]
+    }
+}
+
 /// A pane is a single content area in the split tree.
-class Pane: Identifiable, Codable {
+class Pane: Identifiable, Codable, ObservableObject {
     let id: UUID
-    var content: PaneContent
+    @Published var content: PaneContent
+    @Published var pendingSelection: PaneTypeSelection = .terminal
     
     /// The actual NSView backing this pane (not Codable, recreated on restore)
     weak var view: NSView?
     
-    init(id: UUID = UUID(), content: PaneContent = .terminal) {
+    init(id: UUID = UUID(), content: PaneContent = .unselected) {
         self.id = id
         self.content = content
     }

@@ -89,7 +89,7 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
     
     func splitHorizontal() {
         guard let current = focusedPane else { return }
-        let newPane = Pane(content: .terminal)
+        let newPane = Pane()
         
         do {
             splitTree = try splitTree.insert(pane: newPane, at: current, direction: .right)
@@ -101,7 +101,7 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
     
     func splitVertical() {
         guard let current = focusedPane else { return }
-        let newPane = Pane(content: .terminal)
+        let newPane = Pane()
         
         do {
             splitTree = try splitTree.insert(pane: newPane, at: current, direction: .down)
@@ -118,7 +118,9 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
         if let clipboardURL = getURLFromClipboard() {
             createWebViewSplit(url: clipboardURL, direction: direction)
         } else {
-            showURLPrompt(direction: direction)
+            promptForWebViewURL { [weak self] url in
+                self?.createWebViewSplit(url: url, direction: direction)
+            }
         }
     }
     
@@ -132,10 +134,28 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
         return nil
     }
     
-    private func showURLPrompt(direction: SplitTree.NewDirection) {
+    private func openWebView(in pane: Pane) {
+        if let clipboardURL = getURLFromClipboard() {
+            pane.content = .webview(url: clipboardURL)
+            DispatchQueue.main.async { [weak self] in
+                self?.focusPane(pane)
+            }
+        } else {
+            promptForWebViewURL { [weak self, weak pane] url in
+                guard let pane else { return }
+                pane.content = .webview(url: url)
+                DispatchQueue.main.async { [weak self] in
+                    self?.focusPane(pane)
+                }
+            }
+        }
+    }
+    
+    private func promptForWebViewURL(completion: @escaping (URL) -> Void) {
+        guard let window else { return }
         let alert = NSAlert()
         alert.messageText = "Open Web Page"
-        alert.informativeText = "Enter a URL to open in a new pane:"
+        alert.informativeText = "Enter a URL to open:"
         alert.addButton(withTitle: "Open")
         alert.addButton(withTitle: "Cancel")
         
@@ -144,7 +164,9 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
         textField.stringValue = "https://"
         alert.accessoryView = textField
         
-        alert.beginSheetModal(for: window!) { [weak self] response in
+        isShowingURLPrompt = true
+        alert.beginSheetModal(for: window) { [weak self] response in
+            defer { self?.isShowingURLPrompt = false }
             guard response == .alertFirstButtonReturn else { return }
             var urlString = textField.stringValue.trimmingCharacters(in: .whitespaces)
             
@@ -154,7 +176,7 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
             }
             
             if let url = URL(string: urlString) {
-                self?.createWebViewSplit(url: url, direction: direction)
+                completion(url)
             }
         }
         
@@ -199,6 +221,12 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
     // MARK: - Keyboard Handling
     
     func handleKeyDown(_ event: NSEvent) -> Bool {
+        if let pane = focusedPane,
+           case .unselected = pane.content,
+           handlePaneTypeSelectionKeyDown(event, pane: pane) {
+            return true
+        }
+        
         guard event.modifierFlags.contains(.command) else { return false }
         
         let hasShift = event.modifierFlags.contains(.shift)
@@ -243,6 +271,62 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
             return true
         default:
             return false
+        }
+    }
+
+    private func handlePaneTypeSelectionKeyDown(_ event: NSEvent, pane: Pane) -> Bool {
+        if isShowingURLPrompt {
+            return false
+        }
+        
+        if event.modifierFlags.intersection([.command, .control, .option]).isEmpty == false {
+            return false
+        }
+        
+        switch event.keyCode {
+        case 126: // Up arrow
+            pane.pendingSelection = pane.pendingSelection.previous()
+            return true
+        case 125: // Down arrow
+            pane.pendingSelection = pane.pendingSelection.next()
+            return true
+        case 36, 76: // Return or Enter
+            applyPaneSelection(pane.pendingSelection, to: pane)
+            return true
+        default:
+            break
+        }
+        
+        guard let input = event.charactersIgnoringModifiers?.lowercased() else { return false }
+        switch input {
+        case "k":
+            pane.pendingSelection = pane.pendingSelection.previous()
+            return true
+        case "j":
+            pane.pendingSelection = pane.pendingSelection.next()
+            return true
+        case "b":
+            applyPaneSelection(.browser, to: pane)
+            return true
+        case "t":
+            applyPaneSelection(.terminal, to: pane)
+            return true
+        default:
+            return false
+        }
+    }
+    
+    private func applyPaneSelection(_ selection: PaneTypeSelection, to pane: Pane) {
+        switch selection {
+        case .browser:
+            pane.pendingSelection = .browser
+            openWebView(in: pane)
+        case .terminal:
+            pane.pendingSelection = .terminal
+            pane.content = .terminal
+            DispatchQueue.main.async { [weak self] in
+                self?.focusPane(pane)
+            }
         }
     }
     

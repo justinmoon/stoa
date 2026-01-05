@@ -152,9 +152,9 @@ struct SplitNodeView: View {
     }
 }
 
-/// Renders a single pane with either a terminal or webview.
+/// Renders a single pane with a selector, terminal, or webview.
 struct PaneView: View {
-    let pane: Pane
+    @ObservedObject var pane: Pane
     @ObservedObject var controller: StoaWindowController
     @EnvironmentObject var ghosttyApp: GhosttyApp
     
@@ -166,6 +166,8 @@ struct PaneView: View {
         GeometryReader { geo in
             ZStack {
                 switch pane.content {
+                case .unselected:
+                    PaneTypeSelectionView(selection: pane.pendingSelection)
                 case .terminal:
                     PaneTerminalViewRepresentable(pane: pane, size: geo.size, controller: controller)
                 case .webview(let url):
@@ -185,6 +187,47 @@ struct PaneView: View {
         .onTapGesture {
             controller.focusPane(pane)
         }
+    }
+}
+
+struct PaneTypeSelectionView: View {
+    let selection: PaneTypeSelection
+    
+    var body: some View {
+        ZStack {
+            VStack(spacing: 12) {
+                PaneTypeSelectionOption(
+                    title: "\(PaneTypeSelection.browser.title) [\(PaneTypeSelection.browser.hotkey)]",
+                    isSelected: selection == .browser
+                )
+                PaneTypeSelectionOption(
+                    title: "\(PaneTypeSelection.terminal.title) [\(PaneTypeSelection.terminal.hotkey)]",
+                    isSelected: selection == .terminal
+                )
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+struct PaneTypeSelectionOption: View {
+    let title: String
+    let isSelected: Bool
+    
+    var body: some View {
+        Text(title)
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundColor(isSelected ? .black : .white)
+            .padding(.vertical, 6)
+            .padding(.horizontal, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isSelected ? Color.white : Color.clear)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.gray.opacity(isSelected ? 0.0 : 0.6), lineWidth: 1)
+                    )
+            )
     }
 }
 
