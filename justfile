@@ -117,7 +117,9 @@ test-embed: build-app
     set -euo pipefail
     tmpfile="$(mktemp /tmp/stoa-embed.XXXXXX)"
     echo "embed test" > "$tmpfile"
-    STOA_EDITOR_EMBED_TEST=1 STOA_EDITOR_FILE="$tmpfile" "{{app_bundle_dir}}/Contents/MacOS/stoa"
+    DYLD_FRAMEWORK_PATH="$PWD/Libraries/CEF" \
+      DYLD_LIBRARY_PATH="$PWD/Libraries/CEF/Chromium Embedded Framework.framework/Libraries" \
+      STOA_EDITOR_EMBED_TEST=1 STOA_EDITOR_FILE="$tmpfile" "{{app_bundle_dir}}/Contents/MacOS/stoa"
 
 # Run tests
 test:

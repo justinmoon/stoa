@@ -176,8 +176,6 @@ struct PaneView: View {
                     PaneTypeSelectionView(selection: pane.pendingSelection)
                 case .terminal, .webview, .chromium:
                     PaneAppViewRepresentable(pane: pane, size: geo.size, controller: controller)
-                case .terminal, .webview, .chromium:
-                    PaneAppViewRepresentable(pane: pane, size: geo.size, controller: controller)
                 case .editor(let url):
                     PaneEditorViewRepresentable(pane: pane, url: url, controller: controller)
                 }
