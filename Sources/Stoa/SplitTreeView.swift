@@ -174,10 +174,8 @@ struct PaneView: View {
                 switch pane.content {
                 case .unselected:
                     PaneTypeSelectionView(selection: pane.pendingSelection)
-                case .terminal, .webview, .chromium:
+                case .terminal, .webview, .chromium, .editor:
                     PaneAppViewRepresentable(pane: pane, size: geo.size, controller: controller)
-                case .editor(let url):
-                    PaneEditorViewRepresentable(pane: pane, url: url, controller: controller)
                 }
                 
                 // Focus border
@@ -359,28 +357,5 @@ final class PaneAppContainerView: NSView {
     override func layout() {
         super.layout()
         currentApp?.view.frame = bounds
-    }
-}
-
-/// NSViewRepresentable for editor panes - stores view reference in pane model
-struct PaneEditorViewRepresentable: NSViewRepresentable {
-    let pane: Pane
-    let url: URL
-    let controller: StoaWindowController
-
-    func makeNSView(context: Context) -> EditorHostView {
-        if let existingView = pane.view as? EditorHostView {
-            controller.attachEditorSession(for: pane, hostView: existingView, url: url)
-            return existingView
-        }
-
-        let hostView = EditorHostView()
-        pane.view = hostView
-        controller.attachEditorSession(for: pane, hostView: hostView, url: url)
-        return hostView
-    }
-
-    func updateNSView(_ hostView: EditorHostView, context: Context) {
-        controller.updateEditorSessionFrame(for: pane)
     }
 }

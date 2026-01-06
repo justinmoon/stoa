@@ -12,7 +12,6 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
     
     let ghosttyApp: GhosttyApp
     private var eventMonitor: Any?
-    private var editorSessions: [UUID: EditorEmbeddedSession] = [:]
     
     var focusedPane: Pane? {
         guard let id = focusedPaneId else { return nil }
@@ -88,12 +87,7 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
     
     func focusPane(_ pane: Pane) {
         focusedPaneId = pane.id
-        if let view = pane.view ?? pane.app?.view {
-            window?.makeFirstResponder(view)
-        }
-        if case .editor = pane.content {
-            editorSessions[pane.id]?.focus()
-        }
+        pane.app?.focus()
     }
     
     func focusPane(direction: SplitTree.FocusDirection) {
@@ -325,9 +319,6 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
     
     func closePane() {
         guard let current = focusedPane else { return }
-        if case .editor = current.content {
-            removeEditorSession(for: current)
-        }
         current.app?.destroy()
         current.app = nil
         
@@ -524,10 +515,13 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
             pane.app?.destroy()
             pane.app = makeChromiumApp(url: url, size: size)
             return pane.app
-        case .editor:
+        case .editor(let url):
+            if let app = pane.app as? EditorHostView, app.matches(fileURL: url) {
+                return app
+            }
             pane.app?.destroy()
-            pane.app = nil
-            return nil
+            pane.app = makeEditorApp(url: url)
+            return pane.app
         }
     }
 
@@ -563,37 +557,30 @@ class StoaWindowController: NSWindowController, NSWindowDelegate, ObservableObje
         return chromiumView
     }
 
-    // MARK: - Editor Session
-
-    func attachEditorSession(for pane: Pane, hostView: EditorHostView, url: URL) {
-        if let session = editorSessions[pane.id] {
-            try? session.attach(hostView: hostView)
-            return
-        }
-
-        do {
-            let session = try EditorEmbeddedSession(paneId: pane.id, fileURL: url, hostView: hostView)
-            editorSessions[pane.id] = session
-        } catch {
-            print("Failed to launch editor: \(error)")
-        }
+    private func makeEditorApp(url: URL) -> StoaApp {
+        let editorView = EditorHostView(fileURL: url)
+        return editorView
     }
 
-    func updateEditorSessionFrame(for pane: Pane) {
-        editorSessions[pane.id]?.updateFrame()
-    }
-
-    func removeEditorSession(for pane: Pane) {
-        editorSessions[pane.id]?.shutdown()
-        editorSessions.removeValue(forKey: pane.id)
-    }
+    // MARK: - Editor Actions
 
     func setEditorText(for pane: Pane, text: String) -> Bool {
-        editorSessions[pane.id]?.setText(text) ?? false
+        editorApp(for: pane)?.setText(text) ?? false
     }
 
     func saveEditor(for pane: Pane) -> Bool {
-        editorSessions[pane.id]?.save() ?? false
+        editorApp(for: pane)?.save() ?? false
+    }
+
+    private func editorApp(for pane: Pane) -> EditorHostView? {
+        if let app = pane.app as? EditorHostView {
+            return app
+        }
+        guard case .editor = pane.content else { return nil }
+        let fallbackSize = CGSize(width: 800, height: 600)
+        let size = window?.contentView?.bounds.size ?? fallbackSize
+        _ = ensureApp(for: pane, size: size)
+        return pane.app as? EditorHostView
     }
     
     // MARK: - NSWindowDelegate

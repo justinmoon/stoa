@@ -15,15 +15,13 @@ enum EditorEmbeddedError: Error, CustomStringConvertible {
 }
 
 final class EditorEmbeddedSession {
-    private let paneId: UUID
     private let fileURL: URL
     private weak var hostView: EditorHostView?
     private var handle: OpaquePointer?
 
     var isReady: Bool { handle != nil }
 
-    init(paneId: UUID, fileURL: URL, hostView: EditorHostView) throws {
-        self.paneId = paneId
+    init(fileURL: URL, hostView: EditorHostView) throws {
         self.fileURL = fileURL
         try attach(hostView: hostView)
     }
@@ -39,16 +37,25 @@ final class EditorEmbeddedSession {
     }
 
     func focus() {
+        if handle == nil {
+            try? ensureEditor()
+        }
         guard let handle else { return }
         _ = zed_editor_focus(handle)
     }
 
     func setText(_ text: String) -> Bool {
+        if handle == nil {
+            try? ensureEditor()
+        }
         guard let handle else { return false }
         return text.withCString { zed_editor_set_text(handle, $0) }
     }
 
     func save() -> Bool {
+        if handle == nil {
+            try? ensureEditor()
+        }
         guard let handle else { return false }
         return zed_editor_save(handle)
     }

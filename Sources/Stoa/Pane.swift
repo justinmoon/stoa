@@ -63,10 +63,7 @@ class Pane: Identifiable, Codable, ObservableObject {
     @Published var pendingSelection: PaneTypeSelection = .terminal
     
     /// The actual app backing this pane (not Codable, recreated on restore).
-    weak var app: StoaApp?
-    
-    /// The actual NSView backing this pane (not Codable, recreated on restore).
-    weak var view: NSView?
+    var app: StoaApp?
     
     init(id: UUID = UUID(), content: PaneContent = .unselected) {
         self.id = id
